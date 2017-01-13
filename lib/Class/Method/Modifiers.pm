@@ -18,8 +18,6 @@ our %EXPORT_TAGS = (
 
 BEGIN {
   *_HAS_READONLY = $] >= 5.008 ? sub(){1} : sub(){0};
-  *_MRO_MODULE   = "$]" < 5.010 ? sub() { "MRO/Compat.pm" } : sub() { "mro.pm" };
-
 }
 
 # generate list of overloadable operators
@@ -250,39 +248,28 @@ sub _getglob {
 
 sub _overloaded_op_method {
 
-    require( _MRO_MODULE );
-
     my ( $class, $op ) = @_;
 
     my $symbol = '(' . $op;
 
-    my $coderef;
-    my $method_name;
+    my $glob = overload::mycan( $class, $symbol );
 
-    my $isa = mro::get_linear_isa( $class );
-
-    for my $pkg ( @$isa ) {
-
-        next
-          unless defined( $coderef = *{ _getglob "${pkg}::${symbol}" }{CODE} );
-
-        # method name ?
-        if (
-            ( defined &overload::nil && $coderef == \&overload::nil )
-            || ( defined &overload::_nil
-                && $coderef == \&overload::_nil ) )
-        {
-
-            $method_name = ${ *{ _getglob "${pkg}::${symbol}" }{SCALAR} };
-
-            # weird but possible?
-            return unless defined $method_name;
-        }
-
-        last;
-    }
-
+    my $coderef = *{$glob}{CODE};
     return if !defined $coderef;
+
+    # method name ?
+    my $method_name;
+    if (
+        ( defined &overload::nil && $coderef == \&overload::nil )
+        || ( defined &overload::_nil
+             && $coderef == \&overload::_nil ) )
+      {
+
+          $method_name = ${ *{ $glob }{SCALAR} };
+          # weird but possible?
+          return unless defined $method_name;
+      }
+
 
     # if $method_name is undefined, then $coderef is the real method
     # to call. we can only modify named subroutines, so create a slot
